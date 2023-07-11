@@ -29,13 +29,13 @@ def compute_zeldovich_approx_cf(cosmo: dict, fname: str) -> None:
     xi_lin = cf_lin(r)
     xi_zel = cf_zel(r)
 
-    with h5.File(SRC_PATH + f"/data/{fname}.h5", "w") as hdf:
-        hdf.create_dataset("k", data=k)  # h/Mpc
-        hdf.create_dataset("r", data=r)  # Mpc//h
-        hdf.create_dataset("pk_lin", data=p_lin)  # (Mpc/h)^3
-        hdf.create_dataset("pk_zel", data=p_zel)  # (Mpc/h)^3
-        hdf.create_dataset("xi_lin", data=xi_lin)
-        hdf.create_dataset("xi_zel", data=xi_zel)
+    with h5.File(SRC_PATH + f"/data/{fname}.h5", "w") as hdf_save:
+        hdf_save.create_dataset("k", data=k)  # h/Mpc
+        hdf_save.create_dataset("r", data=r)  # Mpc//h
+        hdf_save.create_dataset("pk_lin", data=p_lin)  # (Mpc/h)^3
+        hdf_save.create_dataset("pk_zel", data=p_zel)  # (Mpc/h)^3
+        hdf_save.create_dataset("xi_lin", data=xi_lin)
+        hdf_save.create_dataset("xi_zel", data=xi_zel)
     return
 
 
