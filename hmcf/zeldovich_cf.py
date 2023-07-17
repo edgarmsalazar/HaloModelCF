@@ -2,7 +2,7 @@ import h5py as h5
 import numpy as np
 from nbodykit.lab import cosmology
 
-from src.config import SRC_PATH
+from hmcf.config import SRC_PATH
 
 
 def compute_zeldovich_approx_cf(cosmo: dict, fname: str) -> None:

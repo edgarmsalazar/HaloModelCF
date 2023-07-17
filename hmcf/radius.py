@@ -2,7 +2,7 @@ from typing import Tuple
 
 import numpy as np
 
-from src.cosmology import RSOFT
+from hmcf.cosmology import RSOFT
 
 
 def get_radial_bins(

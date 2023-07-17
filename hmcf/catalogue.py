@@ -6,7 +6,7 @@ sys.path.append("/home/edgarmsc/Projects/HaloModelCF/")
 import h5py as h5
 import numpy as np
 
-from src.config import MBINEDGES, MBINSTRS, MEMBSIZE, NMBINS, SRC_PATH
+from hmcf.config import MBINEDGES, MBINSTRS, MEMBSIZE, NMBINS, SRC_PATH
 
 
 def generate_halo_mass_bin_masks() -> None:
