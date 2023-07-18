@@ -10,9 +10,9 @@ import h5py as h5
 import numpy as np
 from tqdm import tqdm
 
-from hmcf.config import MBINSTRS, SRC_PATH
-from hmcf.cosmology import BOXSIZE, GRIDSIZE
-from hmcf.radius import get_radial_bins
+from physhalo.config import MBINSTRS, SRC_PATH
+from physhalo.cosmology import BOXSIZE, GRIDSIZE
+from physhalo.radius import get_radial_bins
 
 
 def partition_box(

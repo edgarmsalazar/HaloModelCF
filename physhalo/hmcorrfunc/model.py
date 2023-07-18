@@ -7,8 +7,8 @@ from scipy.integrate import quad
 from scipy.interpolate import interp1d
 from scipy.special import erf
 
-from hmcf.config import NMBINS, SRC_PATH
-from hmcf.cosmology import RHOM
+from physhalo.config import NMBINS, SRC_PATH
+from physhalo.cosmology import RHOM
 
 # Interpolate Zel'dovich approximation correlation function from file.
 with h5.File(SRC_PATH + "/data/xi_zel.h5", "r") as hdf:

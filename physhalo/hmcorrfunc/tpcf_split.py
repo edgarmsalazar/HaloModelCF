@@ -14,10 +14,10 @@ import numpy as np
 from tqdm import tqdm
 from scipy.linalg import block_diag
 
-from hmcf.config import MBINSTRS, MEMBSIZE, SRC_PATH
-from hmcf.cosmology import BOXSIZE, GRIDSIZE, PARTMASS, RHOM
-from hmcf.tpcf import partition_box
-from hmcf.radius import get_radial_bins
+from physhalo.config import MBINSTRS, MEMBSIZE, SRC_PATH
+from physhalo.cosmology import BOXSIZE, GRIDSIZE, PARTMASS, RHOM
+from physhalo.radius import get_radial_bins
+from physhalo.hmcorrfunc.tpcf import partition_box
 
 
 def process_DD_pairs(

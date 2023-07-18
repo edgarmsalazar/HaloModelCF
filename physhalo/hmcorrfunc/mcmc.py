@@ -11,9 +11,9 @@ from emcee.ensemble import EnsembleSampler
 from emcee.moves import DEMove, StretchMove
 from scipy.optimize import curve_fit
 
-from hmcf.config import MBINSTRS, NMBINS, SRC_PATH
-from hmcf.cosmology import RSOFT
-from hmcf.model import power_law
+from physhalo.config import MBINSTRS, NMBINS, SRC_PATH
+from physhalo.cosmology import RSOFT
+from physhalo.hmcorrfunc.model import power_law
 
 
 class MCMC:

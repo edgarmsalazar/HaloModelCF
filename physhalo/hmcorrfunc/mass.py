@@ -5,9 +5,9 @@ import numpy as np
 from scipy.integrate import quad, simps
 from scipy.optimize import minimize
 
-from hmcf.config import MBINSTRS, NMBINS, SRC_PATH
-from hmcf.cosmology import RHOM, RSOFT
-from hmcf.model import rho_orb_model_norm
+from physhalo.config import MBINSTRS, NMBINS, SRC_PATH
+from physhalo.cosmology import RHOM, RSOFT
+from physhalo.hmcorrfunc.model import rho_orb_model_norm
 
 
 def mass_correction() -> None:
