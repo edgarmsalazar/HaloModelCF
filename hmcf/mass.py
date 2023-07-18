@@ -28,6 +28,7 @@ def mass_correction() -> None:
         mass_mean = hdf["mean"][()]
     mass_corrected = np.zeros_like(mass_mean)
     mass_from_fit = np.zeros_like(mass_mean)
+    params = np.zeros((NMBINS, 4))
 
     print("logA\t rh\t ainf\t a")
     with h5.File(SRC_PATH + "/data/xihm_split.h5", "r") as hdf:
@@ -47,7 +48,7 @@ def mass_correction() -> None:
                 method="Nelder-Mead",
                 options={"maxiter": 10_000},
             )
-            # print(res)
+            params[i] = res.x
             print("".join("{:>6.3f}\t".format(i) for i in res.x))
 
             # Evaluate model at each rbin < 6*rsoft
@@ -87,6 +88,7 @@ def mass_correction() -> None:
         )
     with h5.File(SRC_PATH + "/data/mass.h5", "w") as hdf_save:
         hdf_save.create_dataset("mass", data=mass_corrected)
+        hdf_save.create_dataset("best_fit", data=params)
 
     return
 

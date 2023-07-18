@@ -285,14 +285,18 @@ class BinMC(MCMC):
                 self._mass,
             )
 
+            # Starting with the largest mass bin, initialize parameters to the 
+            # best fit values from the mass correction fit.
+            if self._nbin == NMBINS-1:
+                with h5.File(SRC_PATH + "/data/mass.h5", "r") as hdf_load:
+                    self.pars_init = [*hdf_load["best_fit"][-1, 1:], -2]
+                    # self.pars_init = [0.8, 2.0, 0.035, -2]
             # Initialize parameters to the previous mass bin best fit values.
             # This is ok because the parameter variation with mass is smooth.
-            if self._nbin == 0:
-                self.pars_init = [0.8, 2.0, 0.035, -2]
             else:
                 with h5.File(SRC_PATH + "/fits/mle.h5", "r") as hdf_load:
                     self.pars_init = hdf_load[
-                        f"max_posterior/orb/{MBINSTRS[self._nbin-1]}"
+                        f"max_posterior/orb/{MBINSTRS[self._nbin+1]}"
                     ][()]
 
         elif self._ptype == "inf":
