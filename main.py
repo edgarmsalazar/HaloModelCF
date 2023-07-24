@@ -2,13 +2,13 @@ from warnings import filterwarnings
 
 filterwarnings("ignore")
 
-from hmcf.utils import timer
+from physhalo.utils import timer
 
 
 @timer
 def catalogue() -> None:
-    from hmcf.catalogue import (generate_halo_mass_bin_masks,
-                               generate_particle_mass_bin_masks)
+    from physhalo.catalogue import (generate_halo_mass_bin_masks,
+                                    generate_particle_mass_bin_masks)
 
     generate_halo_mass_bin_masks()
     generate_particle_mass_bin_masks()
@@ -17,12 +17,13 @@ def catalogue() -> None:
 
 
 @timer
-def hmcf() -> None:
-    from hmcf.cosmology import COSMO, COSMO_QUIJOTE
-    from hmcf.tpcf import compute_hmcf, compute_mmcf
-    from hmcf.tpcf_split import (compute_hmcf_cov_split, compute_hmcf_split,
-                                extend_xi_inf)
-    from hmcf.zeldovich_cf import compute_zeldovich_approx_cf
+def physhalo() -> None:
+    from physhalo.cosmology import COSMO, COSMO_QUIJOTE
+    from physhalo.hmcorrfunc.tpcf import compute_hmcf, compute_mmcf
+    from physhalo.hmcorrfunc.tpcf_split import (compute_hmcf_cov_split,
+                                                compute_hmcf_split,
+                                                extend_xi_inf)
+    from physhalo.hmcorrfunc.zeldovich_cf import compute_zeldovich_approx_cf
 
     compute_mmcf()
     compute_hmcf()
@@ -37,19 +38,22 @@ def hmcf() -> None:
 
 @timer
 def model_fitting() -> None:
-    from hmcf.config import NMBINS
-    from hmcf.mass import mass_correction
-    from hmcf.mcmc import BinMC, FullMC
-    from hmcf.model import lnpost_inf, lnpost_inf_1, lnpost_orb, lnpost_orb_smooth
+    from physhalo.config import NMBINS
+    from physhalo.hmcorrfunc.mass import mass_correction
+    from physhalo.hmcorrfunc.mcmc import BinMC, FullMC
+    from physhalo.hmcorrfunc.model import (lnpost_inf, lnpost_inf_1,
+                                           lnpost_orb,
+                                           lnpost_orb_smooth_a_pl_ai_pl,
+                                           lnpost_orb_smooth_ai_pl,
+                                           lnpost_orb_smooth_a_pl)
 
     # mass_correction()
-
     # for i in range(NMBINS):
     #     bmc = BinMC(
     #         ndim=4,
-    #         nwalkers=40,
+    #         nwalkers=100,
     #         nsteps=10_000,
-    #         burnin=10_000,
+    #         burnin=5_000,
     #         log_posterior=lnpost_orb,
     #         mbin_i=i,
     #         ptype="orb",
@@ -57,36 +61,66 @@ def model_fitting() -> None:
     #     print("Initial point ", bmc.pars_init)
     #     bmc.run_chain()
     #     bmc.summary()
-        
+        # break
+    
+    # Fit smooth model with all parameters power-laws of mass
     # fmc = FullMC(
-    #     ndim=6,
+    #     ndim=7,
     #     nwalkers=100,
     #     nsteps=10_000,
-    #     burnin=10_00,
-    #     log_posterior=lnpost_orb_smooth,
+    #     burnin=2_000,
+    #     log_posterior=lnpost_orb_smooth_a_pl_ai_pl,
     #     ptype="orb",
     # )
     # print("Initial point ", fmc.pars_init)
     # fmc.run_chain()
     # fmc.summary()
+    
+    # Fit smooth model with a mass-independent
+    # fmc = FullMC(
+    #     ndim=6,
+    #     nwalkers=100,
+    #     nsteps=5_000,
+    #     burnin=2_000,
+    #     log_posterior=lnpost_orb_smooth_ai_pl,
+    #     ptype="orb",
+    # )
+    # print("Initial point ", fmc.pars_init)
+    # fmc.run_chain()
+    # fmc.summary()
+    
+    # Fit smooth model with alpha_infty mass-independent
+    fmc = FullMC(
+        ndim=6,
+        nwalkers=100,
+        nsteps=5_000,
+        burnin=2_000,
+        log_posterior=lnpost_orb_smooth_a_pl,
+        ptype="orb",
+    )
+    print("Initial point ", fmc.pars_init)
+    fmc.run_chain()
+    fmc.summary()
+    
 
-    # NOTE: The infall profile takes rh as argument. So the orbiting profile
-    # must be fit first.
-    for i in range(NMBINS):
-        # if i == 0: continue
-        bmc = BinMC(
-            ndim=6,
-            nwalkers=100,
-            nsteps=10_000,
-            burnin=10_000,
-            log_posterior=lnpost_inf,
-            mbin_i=i,
-            ptype="inf",
-        )
-        print("Initial point ", bmc.pars_init)
-        bmc.run_chain()
-        bmc.summary()
-        break
+
+    # # NOTE: The infall profile takes rh as argument. So the orbiting profile
+    # # must be fit first.
+    # for i in range(NMBINS):
+    #     # if i == 0: continue
+    #     bmc = BinMC(
+    #         ndim=6,
+    #         nwalkers=100,
+    #         nsteps=10_000,
+    #         burnin=10_000,
+    #         log_posterior=lnpost_inf,
+    #         mbin_i=i,
+    #         ptype="inf",
+    #     )
+    #     print("Initial point ", bmc.pars_init)
+    #     bmc.run_chain()
+    #     bmc.summary()
+    #     break
 
     return None
 
@@ -94,7 +128,7 @@ def model_fitting() -> None:
 @timer
 def main() -> None:
     # catalogue()         # Takes ~1 min
-    # hmcf()              # Takes ~1 hr
+    # physhalo()              # Takes ~1 hr
     model_fitting()     # Takes ~2 hr
 
     return None

@@ -383,10 +383,10 @@ class FullMC(MCMC):
                 self._covy = np.zeros((NMBINS, len(self._x), len(self._x)))
 
                 for k, mbin in enumerate(MBINSTRS):
-                    self._y[k, :] = hdf_load[f"xi/orb/{mbin}"][()]
-                    self._covy[k, :, :] = hdf_load[f"xi_cov/all/{mbin}"][()]
+                    self._y[k, :] = hdf_load[f"rho/orb/{mbin}"][()]
+                    self._covy[k, :, :] = RHOM**2*hdf_load[f"xi_cov/all/{mbin}"][()]
                     self._mask[k, :] = (
-                        self._y[k, :] / hdf_load[f"xi/all/{mbin}"][()] > 1e-2
+                        self._y[k, :] / hdf_load[f"rho/all/{mbin}"][()] > 1e-2
                     ) * (self._x > 6 * RSOFT)
 
                 self._lnpost_args = (
@@ -402,13 +402,14 @@ class FullMC(MCMC):
             # best fits as a function of mass.
             params = np.zeros((NMBINS, 4))
             errors = np.zeros((NMBINS, 4))
-            with h5.File(SRC_PATH + "/fits/mle.h5", "r") as hdf_load:
+            with h5.File(SRC_PATH + "/fits/mle_good.h5", "r") as hdf_load:
                 for k, mbin in enumerate(MBINSTRS):
                     params[k, :] = hdf_load[f"max_posterior/orb/{mbin}"][()]
                     errors[k, :] = np.sqrt(
                         np.diag(hdf_load[f"covariance/orb/{mbin}"][()])
                     )
-
+            
+            # Find initialization for rh
             p_init = np.mean(params[:, 0])
             s_init = np.mean(np.diff(params[:, 0])) / np.mean(
                 np.diff(self._mass / self._mpivot)
@@ -421,26 +422,42 @@ class FullMC(MCMC):
                 sigma=errors[:, 0],
             )
 
+            # Find initialization for ainf
             p_init = np.mean(params[:, 1])
             s_init = np.mean(np.diff(params[:, 1])) / np.mean(
                 np.diff(self._mass / self._mpivot)
             )
-            (a_p_init, a_s_init), _ = curve_fit(
+            (ainf_p_init, ainf_s_init), _ = curve_fit(
                 power_law,
                 self._mass / self._mpivot,
                 params[:, 1],
                 p0=(p_init, s_init),
                 sigma=errors[:, 1],
             )
+            
+            # Find initialization for a
+            p_init = np.mean(params[:, 2])
+            s_init = np.mean(np.diff(params[:, 2])) / np.mean(
+                np.diff(self._mass / self._mpivot)
+            )
+            (a_p_init, a_s_init), _ = curve_fit(
+                power_law,
+                self._mass / self._mpivot,
+                params[:, 2],
+                p0=(p_init, s_init),
+                sigma=errors[:, 2],
+            )
+            
             self.pars_init = [
                 rh_p_init,
                 rh_s_init,
+                ainf_p_init,
+                # ainf_s_init,
                 a_p_init,
                 a_s_init,
-                np.mean(params[:, 2]),
                 np.mean(params[:, -1]),
             ]
-
+            
         # if self._ptype == "inf":
         #         self._rh = 0.8434 * np.power(self._mass/self._mpivot, 0.2216)
         #         # # FIXME: Remove

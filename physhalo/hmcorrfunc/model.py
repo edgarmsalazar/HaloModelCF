@@ -77,9 +77,11 @@ def lnpost_orb(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
     delta = np.power(10., logd)
 
     # Compute model deviation from data
-    u = y - rho_orb_model(x, rh, ainf, a, mass)
+    # u = y - rho_orb_model(x, rh, ainf, a, mass)
+    u = x**2 * (y - rho_orb_model(x, rh, ainf, a, mass))
     # Add percent error to the covariance - regulated by delta
-    cov = covy + np.diag(np.power(delta * y, 2))
+    # cov = covy + np.diag(np.power(delta * y, 2))
+    cov = np.outer(x**2, x**2)*(covy + np.diag(np.power(delta * y, 2)))
     # Compute chi squared
     chi2 = np.dot(u, np.linalg.solve(cov, u))
     # Compute ln|C| in a 'smart' way
@@ -164,30 +166,88 @@ def lnpost_inf_1(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
     return -chi2
 
 
-def lnpost_orb_smooth(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+def lnpost_orb_smooth_a_pl_ai_pl(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    scale = RHOM**2
     # Unpack data
     x, y, covy, mask, mass, m_pivot = data
 
     # Check priors. 3 model + 1 likelihood parameters
-    pr, sr, pa, sa, eps, logd = pars
-    if logd > 0 or sa > 0 or pr < 0 or pa < 0 or sr < 0 or eps < 0:
+    pr, sr, painf, sainf, pa, sa, logd = pars
+    if not (-4 < logd < 0) or sainf > 0 or any([p < 0 for p in [pr, sr, painf, pa, sa]]):
         return -np.inf
     delta = np.power(10., logd)
     rh = power_law(mass/m_pivot, pr, sr)
-    ainf = power_law(mass/m_pivot, pa, sa)
+    ainf = power_law(mass/m_pivot, painf, sainf)
+    a = power_law(mass/m_pivot, pa, sa)
 
     # Aggregate likelihood for all mass bins
     lnlike = 0
     for k in range(NMBINS):
         # Compute model deviation from data
-        u = y[k, mask[k, :]] - (rho_orb_model(x[mask[k, :]], rh[k], ainf[k], eps, mass[k])/RHOM - 1)
+        u = y[k, mask[k, :]] - rho_orb_model(x[mask[k, :]], rh[k], ainf[k], a[k], mass[k])
         # Add percent error to the covariance - regulated by delta
         cov = covy[k, mask[k, :], :][:, mask[k, :]] + \
             np.diag(np.power(delta * y[k, mask[k, :]], 2))
         # Compute chi squared
         chi2 = np.dot(u, np.linalg.solve(cov, u))
+        lndetc = len(u) * np.log(scale) + np.log(np.linalg.det(cov / scale))
+        lnlike -= chi2 + lndetc
+    return lnlike
 
-        lnlike -= chi2 + np.log(np.linalg.det(cov))
+
+def lnpost_orb_smooth_ai_pl(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    scale = RHOM**2
+    # Unpack data
+    x, y, covy, mask, mass, m_pivot = data
+
+    # Check priors. 3 model + 1 likelihood parameters
+    pr, sr, painf, sainf, a, logd = pars
+    if not (-4 < logd < 0) or sainf > 0 or any([p < 0 for p in [pr, sr, painf, a]]):
+        return -np.inf
+    delta = np.power(10., logd)
+    rh = power_law(mass/m_pivot, pr, sr)
+    ainf = power_law(mass/m_pivot, painf, sainf)
+
+    # Aggregate likelihood for all mass bins
+    lnlike = 0
+    for k in range(NMBINS):
+        # Compute model deviation from data
+        u = y[k, mask[k, :]] - rho_orb_model(x[mask[k, :]], rh[k], ainf[k], a, mass[k])
+        # Add percent error to the covariance - regulated by delta
+        cov = covy[k, mask[k, :], :][:, mask[k, :]] + \
+            np.diag(np.power(delta * y[k, mask[k, :]], 2))
+        # Compute chi squared
+        chi2 = np.dot(u, np.linalg.solve(cov, u))
+        lndetc = len(u) * np.log(scale) + np.log(np.linalg.det(cov / scale))
+        lnlike -= chi2 + lndetc
+    return lnlike
+
+
+def lnpost_orb_smooth_a_pl(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    scale = RHOM**2
+    # Unpack data
+    x, y, covy, mask, mass, m_pivot = data
+
+    # Check priors. 3 model + 1 likelihood parameters
+    pr, sr, ainf, pa, sa, logd = pars
+    if not (-4 < logd < 0) or any([p < 0 for p in [pr, sr, ainf, pa, sa, ainf]]):
+        return -np.inf
+    delta = np.power(10., logd)
+    rh = power_law(mass/m_pivot, pr, sr)
+    a = power_law(mass/m_pivot, pa, sa)
+
+    # Aggregate likelihood for all mass bins
+    lnlike = 0
+    for k in range(NMBINS):
+        # Compute model deviation from data
+        u = y[k, mask[k, :]] - rho_orb_model(x[mask[k, :]], rh[k], ainf, a[k], mass[k])
+        # Add percent error to the covariance - regulated by delta
+        cov = covy[k, mask[k, :], :][:, mask[k, :]] + \
+            np.diag(np.power(delta * y[k, mask[k, :]], 2))
+        # Compute chi squared
+        chi2 = np.dot(u, np.linalg.solve(cov, u))
+        lndetc = len(u) * np.log(scale) + np.log(np.linalg.det(cov / scale))
+        lnlike -= chi2 + lndetc
     return lnlike
 
 
