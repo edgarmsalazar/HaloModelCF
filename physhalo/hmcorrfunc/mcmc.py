@@ -384,12 +384,14 @@ class FullMC(MCMC):
         burnin: int,
         log_posterior: Callable,
         ptype: str,
+        smooth_iter: int,
     ) -> None:
         super().__init__(ndim, nwalkers, nsteps, burnin)
         self._lnpost = log_posterior
         self._ptype = ptype
         self._mpivot = np.power(10.0, 14)
-        self._chain_name = f"{self._ptype}/smooth"
+        self._chain_name = f"{self._ptype}/smooth_{smooth_iter}"
+        self._smooth_iter = smooth_iter
 
         self.load_data()
         self.walker_init()
@@ -473,16 +475,36 @@ class FullMC(MCMC):
                 sigma=errors[:, 2],
             )
             
-            self.pars_init = [
-                rh_p_init,
-                rh_s_init,
-                ainf_p_init,
-                # ainf_s_init,
-                a_p_init,
-                a_s_init,
-                np.mean(params[:, -1]),
-            ]
+            if self._smooth_iter == 1:
+                self.pars_init = [
+                    rh_p_init,
+                    rh_s_init,
+                    ainf_p_init,
+                    ainf_s_init,
+                    a_p_init,
+                    a_s_init,
+                    np.mean(params[:, -1]),
+                ]
             
+            elif self._smooth_iter == 2:
+                self.pars_init = [
+                    rh_p_init,
+                    rh_s_init,
+                    ainf_p_init,
+                    ainf_s_init,
+                    a_p_init,
+                    np.mean(params[:, -1]),
+                ]
+            
+            elif self._smooth_iter == 3:
+                self.pars_init = [
+                    rh_p_init,
+                    rh_s_init,
+                    ainf_p_init,
+                    a_p_init,
+                    a_s_init,
+                    np.mean(params[:, -1]),
+                ]
         # if self._ptype == "inf":
         #         self._rh = 0.8434 * np.power(self._mass/self._mpivot, 0.2216)
         #         # # FIXME: Remove

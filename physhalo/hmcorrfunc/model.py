@@ -81,89 +81,13 @@ def lnpost_orb(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
     u = x**2 * (y - rho_orb_model(x, rh, ainf, a, mass))
     # Add percent error to the covariance - regulated by delta
     # cov = covy + np.diag(np.power(delta * y, 2))
-    cov = np.outer(x**2, x**2)*(covy + np.diag(np.power(delta * y, 2)))
+    cov = np.outer(x**2, x**2)*(covy + np.diag((delta * y)))
     # Compute chi squared
     chi2 = np.dot(u, np.linalg.solve(cov, u))
     # Compute ln|C| in a 'smart' way
     lndetc = len(u) * np.log(scale) + np.log(np.linalg.det(cov / scale))
 
     return -0.5 * (chi2 + lndetc)
-
-
-@njit()
-def xi_inf_beta_model(
-    r: float, b0: float, r0: float, g: float,
-) -> float:
-    return 1.0 + b0 / np.power(1 + r/r0, g)
-
-@njit()
-def xi_inf_den_model(
-    r: float, rh: float, c: float,
-) -> float:
-    x = r / rh
-    return 1 + c * x * np.exp(-x)
-
-
-def xi_inf_model(
-    r: float, bias: float, c: float, g: float, b0: float, r0: float, rh: float,
-) -> float:
-    xi_mod = bias * xi_inf_beta_model(r, b0, r0, g) * xi_zel_interp(r)
-    xi_mod /= xi_inf_den_model(r, rh, c)
-    return xi_mod
-
-
-def xihm_model(
-    r: float,
-    rh: float,
-    ainf: float,
-    a: float,
-    bias: float,
-    c: float,
-    g: float,
-    b0: float,
-    r0: float,
-    mass: float,
-) -> float:
-    orb = rho_orb_model(r, rh, ainf, a, mass)
-    inf = RHOM * (1.0 + xi_inf_model(r, bias, c, g, b0, r0, rh))
-    return (orb + inf) / RHOM - 1.0
-
-
-
-def lnpost_inf(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
-    # Unpack data
-    x, y, covy, rh = data
-
-    # Check priors.
-    b, c, g, b0, r0, logd = pars
-    if not (0 < b < 8) or c < 0 or g < 0 or b0 < 0 or r0 < 0 or not (-4 < logd < 0):
-        return -np.inf
-    delta = np.power(10., logd)
-
-    # Compute model deviation from data
-    u = y - xi_inf_model(x, b, c, g, b0, r0, rh)
-    # Add percent error to the covariance - regulated by delta
-    cov = covy + np.diag((delta * y)**2)
-    # Compute chi squared
-    chi2 = np.dot(u, np.linalg.solve(cov, u))
-
-    return -chi2 - np.log(np.linalg.det(cov))
-
-
-def lnpost_inf_1(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
-    # Unpack data
-    x, y, covy, rh = data
-
-    # Check priors. 5 model + 1 likelihood parameters
-    bias, c, g, b0, r0 = pars
-    if any([p < 0 for p in pars]):
-        return -np.inf
-    
-    # Compute model deviation from data
-    u = y - xi_inf_model(x, bias, c, g, b0, r0, rh)
-    # Compute chi squared
-    chi2 = np.dot(u, np.linalg.solve(covy, u))
-    return -chi2
 
 
 def lnpost_orb_smooth_a_pl_ai_pl(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
@@ -249,6 +173,85 @@ def lnpost_orb_smooth_a_pl(pars: Union[List[float], Tuple[float, ...]], *data) -
         lndetc = len(u) * np.log(scale) + np.log(np.linalg.det(cov / scale))
         lnlike -= chi2 + lndetc
     return lnlike
+
+
+@njit()
+def xi_inf_beta_model(
+    r: float, b0: float, r0: float, g: float,
+) -> float:
+    return 1.0 + b0 / np.power(1 + r/r0, g)
+
+
+@njit()
+def xi_inf_den_model(
+    r: float, rh: float, c: float,
+) -> float:
+    x = r / rh
+    return 1 + c * x * np.exp(-x)
+
+
+def xi_inf_model(
+    r: float, bias: float, c: float, g: float, b0: float, r0: float, rh: float,
+) -> float:
+    xi_mod = bias * xi_inf_beta_model(r, b0, r0, g) * xi_zel_interp(r)
+    xi_mod /= xi_inf_den_model(r, rh, c)
+    return xi_mod
+
+
+def lnpost_inf(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    # Unpack data
+    x, y, covy, rh = data
+
+    # Check priors.
+    b, c, g, b0, r0, logd = pars
+    if not (0 < b < 8) or any([p < 0 for p in [c, g, b0, r0]]) or not (-4 < logd < 0):
+        return -np.inf
+    delta = np.power(10., logd)
+
+    # Compute model deviation from data
+    u = x**2 * (y - xi_inf_model(x, b, c, g, b0, r0, rh))
+    # Add percent error to the covariance - regulated by delta
+    cov = np.outer(x**2, x**2) * (covy + np.diag((delta * y)**2))
+    # Compute chi squared
+    chi2 = np.dot(u, np.linalg.solve(cov, u))
+
+    return -chi2 - np.log(np.linalg.det(cov))
+
+
+def lnpost_inf_1(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    # Unpack data
+    x, y, covy, rh = data
+
+    # Check priors. 5 model + 1 likelihood parameters
+    bias, c, g, b0, r0 = pars
+    if any([p < 0 for p in pars]):
+        return -np.inf
+    
+    # Compute model deviation from data
+    u = y - xi_inf_model(x, bias, c, g, b0, r0, rh)
+    # Compute chi squared
+    chi2 = np.dot(u, np.linalg.solve(covy, u))
+    return -chi2
+
+
+
+def xihm_model(
+    r: float,
+    rh: float,
+    ainf: float,
+    a: float,
+    bias: float,
+    c: float,
+    g: float,
+    b0: float,
+    r0: float,
+    mass: float,
+) -> float:
+    orb = rho_orb_model(r, rh, ainf, a, mass)
+    inf = RHOM * (1.0 + xi_inf_model(r, bias, c, g, b0, r0, rh))
+    return (orb + inf) / RHOM - 1.0
+
+
 
 
 if __name__ == "__main__":
