@@ -12,8 +12,8 @@ from emcee.moves import DEMove, StretchMove
 from scipy.optimize import curve_fit
 
 from physhalo.config import MBINSTRS, NMBINS, SRC_PATH
-from physhalo.cosmology import RSOFT, RHOM
-from physhalo.hmcorrfunc.model import power_law
+from physhalo.cosmology import RHOM, RSOFT
+from physhalo.hmcorrfunc.model import power_law, xi_inf_model, xi_zel_interp
 
 
 class MCMC:
@@ -29,8 +29,8 @@ class MCMC:
         self._nwalkers = nwalkers
         self._nsteps = nsteps
         self._nburn = burnin
-        self._savepath = SRC_PATH + f"/fits/chains.h5"
-        self._mlepath = SRC_PATH + f"/fits/mle.h5"
+        self._savepath = SRC_PATH + f"/data/fits/chains.h5"
+        self._mlepath = SRC_PATH + f"/data/fits/mle.h5"
 
         # Subclass parameters
         self._lnpost = None
@@ -133,15 +133,15 @@ class MCMC:
 
         return None
 
-    def run_chain(self) -> None:
+    def run_chain(self, ncpu=4) -> None:
         if self._chain_name is None:
             raise RuntimeError("MCMC is an abstract class.")
         
-        backend = HDFBackend(SRC_PATH + f"/fits/burn.h5", name='burn')
+        backend = HDFBackend(SRC_PATH + f"/data/fits/burn.h5", name='burn')
         backend.reset(self._nwalkers, self._ndim)
         
         # Run burnin samples
-        with Pool(8) as pool:
+        with Pool(ncpu) as pool:
             sampler = EnsembleSampler(
                 self._nwalkers,
                 self._ndim,
@@ -149,10 +149,6 @@ class MCMC:
                 pool=pool,
                 backend=backend,
                 args=self._lnpost_args,
-                # moves=[
-                #     (DEMove(), 0.5),
-                #     (StretchMove(), 0.5),
-                # ],
             )
             sampler.run_mcmc(
                 self._walkers,
@@ -173,7 +169,7 @@ class MCMC:
         backend.reset(self._nwalkers, self._ndim)
 
         # Run chain
-        with Pool(8) as pool:
+        with Pool(ncpu) as pool:
             sampler = EnsembleSampler(
                 self._nwalkers,
                 self._ndim,
@@ -190,7 +186,7 @@ class MCMC:
                 self._walkers,
                 self._nsteps,
                 progress=True,
-                progress_kwargs={"desc": f"Chain"},
+                progress_kwargs={"desc": f"Chain {self._chain_name[4:]}"},
             )
         return None
 
@@ -277,10 +273,9 @@ class BinMC(MCMC):
                 self._x = hdf_load["rbins"][()]
                 self._y = hdf_load[f"rho/orb/{self._mbin}"][()]
                 self._covy = RHOM**2*hdf_load[f"xi_cov/all/{self._mbin}"][()]
-                self._mask = (self._y / hdf_load[f"rho/all/{self._mbin}"][()] > 1e-2) * (
-                    self._x > 6 * RSOFT
-                )
-            # print(self._x.dtype, self._y.dtype, self._covy.dtype, type(self._mass))
+                rho_ratio = self._y / hdf_load[f"rho/all/{self._mbin}"][()]
+                self._mask = (rho_ratio > 1e-2) * (self._x > 6 * RSOFT)
+                
             # Arguments passed to the log-posterior
             self._lnpost_args = (
                 self._x[self._mask],
@@ -289,31 +284,22 @@ class BinMC(MCMC):
                 self._mass,
             )
 
-            # Starting with the largest mass bin, initialize parameters to the 
-            # best fit values from the mass correction fit.
-            # if self._nbin == NMBINS-1:
+            # Initialize parameters to the best fit values from the mass
+            # correction fit.
             if self._nbin == 0:
-                # with h5.File(SRC_PATH + "/data/mass.h5", "r") as hdf_load:
-                #     self.pars_init = [*hdf_load["best_fit"][-1, 1:], -2]
-                self.pars_init = [0.65, 2.15, 0.04, -2.0]
+                with h5.File(SRC_PATH + "/data/mass.h5", "r") as hdf_load:
+                    self.pars_init = [*hdf_load["best_fit"][0, 1:], -2]
                 
             # Initialize parameters to the previous mass bin best fit values.
             # This is ok because the parameter variation with mass is smooth.
             else:
-                with h5.File(SRC_PATH + "/fits/mle.h5", "r") as hdf_load:
+                with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
                     self.pars_init = hdf_load[
                         f"max_posterior/orb/{MBINSTRS[self._nbin-1]}"
                     ][()]
 
         elif self._ptype == "inf":
-            # Load rh from rho individual fit.
-            with h5.File(SRC_PATH + "/fits/mle_0.h5", "r") as hdf_load:
-                # rh = hdf_load[f"max_posterior/orb/{self._mbin}"][0]
-                rh_pars = hdf_load[f"max_posterior/orb/smooth"][:2]
-            rh = power_law(self._mass/self._mpivot, *rh_pars)
-            # print(rh)
             # X, Y data points and covariance matrix
-            
             with h5.File(SRC_PATH + "/data/xihm_split.h5", "r") as hdf_load, h5.File(
                 SRC_PATH + "/data/xihm.h5", "r"
             ) as hdf_load_2:
@@ -323,6 +309,10 @@ class BinMC(MCMC):
                 rho_ratio = (1 + self._y) / (1 + hdf_load_2[f"xi/100/{self._mbin}"][()])
                 self._mask = (rho_ratio > 1e-2) * (self._x > 6 * RSOFT)
             
+            # Load rh from rho individual fit.
+            with h5.File(SRC_PATH + "/data/fits/mle_orb_good.h5", "r") as hdf_load:
+                rh = hdf_load[f"max_posterior/orb/{self._mbin}"][0]
+            
             # Arguments passed to the log-posterior
             self._lnpost_args = (
                 self._x[self._mask],
@@ -331,15 +321,50 @@ class BinMC(MCMC):
                 rh,
             )
 
+            # Find best fit parameters for lowest mass bin using least-squares
+            # minimization.
+            if self._nbin == 0:
+                # Find best fit bias               
+                mask_bias = (self._x > 20)
+                (bias_init, ), _ = curve_fit(
+                    lambda x, bias: bias * xi_zel_interp(x),
+                    self._x[mask_bias], 
+                    self._y[mask_bias],
+                    p0=[1.2],
+                    sigma=np.diag(self._covy)[mask_bias],
+                )
+
+                # Find best fit c
+                with h5.File(SRC_PATH + "/data/xihm_split.h5", "r") as hdf_load:
+                    xi_ref = hdf_load[f"xi_ext/inf/{MBINSTRS[-1]}"][()]
+                               
+                (c_init, ), _ = curve_fit(
+                    lambda x, c: 1. + c*x*np.exp(-x),
+                    self._x/rh,
+                    (xi_ref/3.65) / (self._y/bias_init),
+                    p0=[1.0],
+                )
+
+                # Find beta0 and r0 with fixed gamma = 2
+                (beta0_init, r0_init), _ = curve_fit(
+                    lambda x, b, r: xi_inf_model(x, bias_init, c_init, 2.0,
+                                                 b, r, rh),
+                    self._x,
+                    self._y,
+                    p0=[70., 0.4],
+                    sigma=np.diag(self._covy),
+                )
+                # print(beta0_init, r0_init)
+                
+                # print()
+                
+                # print("".join("{:>6.3f}\t".format(i) for i in res.x))
+                self.pars_init = [bias_init, c_init, 2, beta0_init, r0_init, -2]
+                
             # Initialize parameters to the previous mass bin best fit values.
             # This is ok because the parameter variation with mass is smooth.
-            if self._nbin == 0:
-                # self.pars_init = [1.21, 3.63, 1.87, 65.23, 0.32]
-                # self.pars_init = [1.25, 6.47, 2.2, 37.25, 1.025]
-                self.pars_init = [1.25, 6.47, 2.2, 37.25, 1.025, -2.0]
-                # self.pars_init = [1.5, 3.0, 2.0, 70.0, 0.4]
             else:
-                with h5.File(SRC_PATH + "/fits/mle.h5", "r") as hdf_load:
+                with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
                     self.pars_init = hdf_load[
                         f"max_posterior/inf/{MBINSTRS[self._nbin-1]}"
                     ][()]
