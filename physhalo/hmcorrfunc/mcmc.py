@@ -136,10 +136,10 @@ class MCMC:
     def run_chain(self, ncpu=4) -> None:
         if self._chain_name is None:
             raise RuntimeError("MCMC is an abstract class.")
-        
-        backend = HDFBackend(SRC_PATH + f"/data/fits/burn.h5", name='burn')
+
+        backend = HDFBackend(SRC_PATH + f"/data/fits/burn.h5", name="burn")
         backend.reset(self._nwalkers, self._ndim)
-        
+
         # Run burnin samples
         with Pool(ncpu) as pool:
             sampler = EnsembleSampler(
@@ -266,16 +266,16 @@ class BinMC(MCMC):
         # Load mass
         with h5.File(SRC_PATH + "/data/mass.h5", "r") as hdf_load:
             self._mass = hdf_load["mass"][self._nbin]
-            
+
         if self._ptype == "orb":
             # X, Y data points
             with h5.File(SRC_PATH + "/data/xihm_split.h5", "r") as hdf_load:
                 self._x = hdf_load["rbins"][()]
                 self._y = hdf_load[f"rho/orb/{self._mbin}"][()]
-                self._covy = RHOM**2*hdf_load[f"xi_cov/all/{self._mbin}"][()]
+                self._covy = RHOM**2 * hdf_load[f"xi_cov/all/{self._mbin}"][()]
                 rho_ratio = self._y / hdf_load[f"rho/all/{self._mbin}"][()]
                 self._mask = (rho_ratio > 1e-2) * (self._x > 6 * RSOFT)
-                
+
             # Arguments passed to the log-posterior
             self._lnpost_args = (
                 self._x[self._mask],
@@ -289,7 +289,7 @@ class BinMC(MCMC):
             if self._nbin == 0:
                 with h5.File(SRC_PATH + "/data/mass.h5", "r") as hdf_load:
                     self.pars_init = [*hdf_load["best_fit"][0, 1:], -2]
-                
+
             # Initialize parameters to the previous mass bin best fit values.
             # This is ok because the parameter variation with mass is smooth.
             else:
@@ -308,11 +308,11 @@ class BinMC(MCMC):
                 self._covy = hdf_load[f"xi_ext_cov/inf/{self._mbin}"][()]
                 rho_ratio = (1 + self._y) / (1 + hdf_load_2[f"xi/100/{self._mbin}"][()])
                 self._mask = (rho_ratio > 1e-2) * (self._x > 6 * RSOFT)
-            
+
             # Load rh from rho individual fit.
-            with h5.File(SRC_PATH + "/data/fits/mle_orb_good.h5", "r") as hdf_load:
+            with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
                 rh = hdf_load[f"max_posterior/orb/{self._mbin}"][0]
-            
+
             # Arguments passed to the log-posterior
             self._lnpost_args = (
                 self._x[self._mask],
@@ -324,11 +324,11 @@ class BinMC(MCMC):
             # Find best fit parameters for lowest mass bin using least-squares
             # minimization.
             if self._nbin == 0:
-                # Find best fit bias               
-                mask_bias = (self._x > 20)
-                (bias_init, ), _ = curve_fit(
+                # Find best fit bias
+                mask_bias = self._x > 20
+                (bias_init,), _ = curve_fit(
                     lambda x, bias: bias * xi_zel_interp(x),
-                    self._x[mask_bias], 
+                    self._x[mask_bias],
                     self._y[mask_bias],
                     p0=[1.2],
                     sigma=np.diag(self._covy)[mask_bias],
@@ -337,30 +337,29 @@ class BinMC(MCMC):
                 # Find best fit c
                 with h5.File(SRC_PATH + "/data/xihm_split.h5", "r") as hdf_load:
                     xi_ref = hdf_load[f"xi_ext/inf/{MBINSTRS[-1]}"][()]
-                               
-                (c_init, ), _ = curve_fit(
-                    lambda x, c: 1. + c*x*np.exp(-x),
-                    self._x/rh,
-                    (xi_ref/3.65) / (self._y/bias_init),
+
+                (c_init,), _ = curve_fit(
+                    lambda x, c: 1.0 + c * x * np.exp(-x),
+                    self._x / rh,
+                    (xi_ref / 3.65) / (self._y / bias_init),
                     p0=[1.0],
                 )
 
                 # Find beta0 and r0 with fixed gamma = 2
                 (beta0_init, r0_init), _ = curve_fit(
-                    lambda x, b, r: xi_inf_model(x, bias_init, c_init, 2.0,
-                                                 b, r, rh),
+                    lambda x, b, r: xi_inf_model(x, bias_init, c_init, 2.0, b, r, rh),
                     self._x,
                     self._y,
-                    p0=[70., 0.4],
+                    p0=[70.0, 0.4],
                     sigma=np.diag(self._covy),
                 )
                 # print(beta0_init, r0_init)
-                
+
                 # print()
-                
+
                 # print("".join("{:>6.3f}\t".format(i) for i in res.x))
                 self.pars_init = [bias_init, c_init, 2, beta0_init, r0_init, -2]
-                
+
             # Initialize parameters to the previous mass bin best fit values.
             # This is ok because the parameter variation with mass is smooth.
             else:
@@ -411,31 +410,22 @@ class FullMC(MCMC):
 
                 for k, mbin in enumerate(MBINSTRS):
                     self._y[k, :] = hdf_load[f"rho/orb/{mbin}"][()]
-                    self._covy[k, :, :] = RHOM**2*hdf_load[f"xi_cov/all/{mbin}"][()]
+                    self._covy[k, :, :] = RHOM**2 * hdf_load[f"xi_cov/all/{mbin}"][()]
                     self._mask[k, :] = (
                         self._y[k, :] / hdf_load[f"rho/all/{mbin}"][()] > 1e-2
                     ) * (self._x > 6 * RSOFT)
-
-                self._lnpost_args = (
-                    self._x,
-                    self._y,
-                    self._covy,
-                    self._mask,
-                    self._mass,
-                    self._mpivot,
-                )
 
             # Get initialization by fitting parametric models to the individual
             # best fits as a function of mass.
             params = np.zeros((NMBINS, 4))
             errors = np.zeros((NMBINS, 4))
-            with h5.File(SRC_PATH + "/fits/mle_good.h5", "r") as hdf_load:
+            with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
                 for k, mbin in enumerate(MBINSTRS):
                     params[k, :] = hdf_load[f"max_posterior/orb/{mbin}"][()]
                     errors[k, :] = np.sqrt(
                         np.diag(hdf_load[f"covariance/orb/{mbin}"][()])
                     )
-            
+
             # Find initialization for rh
             p_init = np.mean(params[:, 0])
             s_init = np.mean(np.diff(params[:, 0])) / np.mean(
@@ -461,7 +451,7 @@ class FullMC(MCMC):
                 p0=(p_init, s_init),
                 sigma=errors[:, 1],
             )
-            
+
             # Find initialization for a
             p_init = np.mean(params[:, 2])
             s_init = np.mean(np.diff(params[:, 2])) / np.mean(
@@ -474,7 +464,17 @@ class FullMC(MCMC):
                 p0=(p_init, s_init),
                 sigma=errors[:, 2],
             )
-            
+
+            # Arguments passed to the log-posterior
+            self._lnpost_args = (
+                self._x,
+                self._y,
+                self._covy,
+                self._mask,
+                self._mass,
+                self._mpivot,
+            )
+
             if self._smooth_iter == 1:
                 self.pars_init = [
                     rh_p_init,
@@ -485,7 +485,7 @@ class FullMC(MCMC):
                     a_s_init,
                     np.mean(params[:, -1]),
                 ]
-            
+
             elif self._smooth_iter == 2:
                 self.pars_init = [
                     rh_p_init,
@@ -495,7 +495,7 @@ class FullMC(MCMC):
                     a_p_init,
                     np.mean(params[:, -1]),
                 ]
-            
+
             elif self._smooth_iter == 3:
                 self.pars_init = [
                     rh_p_init,
@@ -505,57 +505,128 @@ class FullMC(MCMC):
                     a_s_init,
                     np.mean(params[:, -1]),
                 ]
-        # if self._ptype == "inf":
-        #         self._rh = 0.8434 * np.power(self._mass/self._mpivot, 0.2216)
-        #         # # FIXME: Remove
-        #         # g = 1.99606232 * np.power(self._mass/self._mpivot, 0.04678549)
-        #         # r0 = 0.33081616
 
-        #         # X, Y data points and covariance matrix
-        #         with h5.File(join(SDD,
-        #                           'rho_model/xihm_ext_inf.h5'), 'r') as hdf:
-        #             self._x = hdf['rbins'][()]  # radial bins
-        #             self._nrbins = len(self._x)
-        #             self._y = np.zeros((NBIN, self._nrbins))
-        #             self._mask = np.zeros_like(self._y, dtype=bool)
-        #             self._covy = np.zeros((NBIN, self._nrbins, self._nrbins))
-        #             for k, mbin in enumerate(MBINSTRS):
-        #                 self._y[k, :] = hdf[f'xihm/{mbin}'][()]
-        #                 self._covy[k, :, :] = np.diag(np.diag(hdf[f'cov/{mbin}'][()]))
+            else:
+                raise NotImplementedError("Select up to smooth iteration 3")
 
-        #         # Mask
-        #         with h5.File(join(SDD, "rho_model/xihm_full.h5"), "r") as hdf:
-        #             for k, mbin in enumerate(MBINSTRS):
-        #                 rho_ratio = (1 + self._y[k, :]) / \
-        #                     (1 + hdf[f"xihm/100/{mbin}"][()])
-        #                 self._mask[k, :] = (rho_ratio > 0.01) * \
-        #                     (self._x > 6 * RSOFT)
+        elif self._ptype == "inf":
+            # X, Y data points
+            with h5.File(SRC_PATH + "/data/xihm_split.h5", "r") as hdf_load, h5.File(
+                SRC_PATH + "/data/xihm.h5", "r"
+            ) as hdf_load_2:
+                self._x = hdf_load["rbins_ext"][()]
+                self._y = np.zeros((NMBINS, len(self._x)))
+                self._mask = np.zeros_like(self._y, dtype=bool)
+                self._covy = np.zeros((NMBINS, len(self._x), len(self._x)))
 
-        #         self._lnpost_args = (self._x, self._y, self._covy, self._mask,
-        #                              self._rh, self._mass, self._mpivot)
+                for k, mbin in enumerate(MBINSTRS):
+                    self._y[k, :] = hdf_load[f"xi_ext/inf/{mbin}"][()]
+                    self._covy[k, :, :] = hdf_load[f"xi_ext_cov/inf/{mbin}"][()]
+                    ratio = (1 + self._y[k, :]) / (1 + hdf_load_2[f"xi/100/{mbin}"][()])
+                    self._mask[k, :] = (ratio > 1e-2) * (self._x > 6 * RSOFT)
 
-        #     case 'all':
-        #         # a_s = 0.5 * 6.427137 * (1 - erf((np.log10(self._mass/self._mpivot) - (-0.133345)) / 0.696587))
-        #         a_s = 3.71109332 * np.exp(- 0.37581075 * (self._mass/self._mpivot)**2)
+            # Load rh from rho individual fit.
+            self._rh = np.zeros(NMBINS)
+            self._alpha = np.zeros(NMBINS)
+            with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
+                for k, mbin in enumerate(MBINSTRS):
+                    self._rh[k] = hdf_load[f"max_posterior/orb/{mbin}"][0]
+                    self._alpha[k] = hdf_load[f"max_posterior/orb/{mbin}"][1]
 
-        #         # X, Y data points and covariance matrix
-        #         with h5.File(join(SDD, "rho_model/xihm_full.h5"), "r") as hdf:
-        #             self._x = hdf['rbins'][()]  # radial bins
-        #             self._nrbins = len(self._x)
-        #             self._y = np.zeros((NBIN, self._nrbins))
-        #             self._mask = np.zeros_like(self._y, dtype=bool)
-        #             self._covy = np.zeros((NBIN, self._nrbins, self._nrbins))
-        #             for k, mbin in enumerate(MBINSTRS):
-        #                 self._y[k, :] = hdf[f'xihm/100/{mbin}'][()]
-        #                 self._covy[k, :, :] = hdf[f'cov/100/{mbin}'][()]
-        #                 self._mask[k, :] = (self._x > 6 * RSOFT)
+            # Get initialization by fitting parametric models to the individual
+            # best fits as a function of mass.
+            params = np.zeros((NMBINS, 6))
+            errors = np.zeros((NMBINS, 6))
+            with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
+                for k, mbin in enumerate(MBINSTRS):
+                    params[k, :] = hdf_load[f"max_posterior/inf/{mbin}"][()]
+                    errors[k, :] = np.sqrt(
+                        np.diag(hdf_load[f"covariance/inf/{mbin}"][()])
+                    )
 
-        #         # self._lnpost_args = (self._x, self._y, self._covy, self._mask,
-        #         #                      self._mass, self._mpivot, a_s, gs)
-        #         self._lnpost_args = (self._x, self._y, self._covy, self._mask,
-        #                              self._mass, self._mpivot, a_s)
-        #     case _:
-        #         raise ValueError("Must select ['all', 'orb', 'inf'].")
+            # Find initialization for b
+            p_init = np.mean(params[:, 0])
+            s_init = np.mean(np.diff(params[:, 0])) / np.mean(
+                np.diff(self._mass / self._mpivot)
+            )
+            (b_p_init, b_s_init), _ = curve_fit(
+                power_law,
+                self._mass / self._mpivot,
+                params[:, 0],
+                p0=(p_init, s_init),
+                sigma=errors[:, 0],
+            )
+
+            # Find initialization for b
+            c_0_init = np.max(params[:, 1])
+            c_mu_init = 0.01  # Arbitrary
+            c_v_init = 1.0  # Arbitrary
+
+            p_init = np.mean(params[:, 2])
+            s_init = np.mean(np.diff(params[:, 2])) / np.mean(
+                np.diff(self._mass / self._mpivot)
+            )
+            (g_p_init, g_s_init), _ = curve_fit(
+                power_law,
+                self._mass / self._mpivot,
+                params[:, 2],
+                p0=(p_init, s_init),
+                sigma=errors[:, 2],
+            )
+
+            if self._smooth_iter == 1:
+                # Arguments passed to the log-posterior
+                self._lnpost_args = (
+                    self._x,
+                    self._y,
+                    self._covy,
+                    self._mask,
+                    self._mass,
+                    self._mpivot,
+                    self._rh,
+                )
+
+                self.pars_init = [
+                    b_p_init,
+                    b_s_init,
+                    c_0_init,
+                    c_mu_init,
+                    c_v_init,
+                    g_p_init,
+                    g_s_init,
+                    np.mean(params[:, 3]),
+                    np.mean(params[:, 4]),
+                    np.mean(params[:, -1]),
+                ]
+            elif self._smooth_iter == 2:
+                # Arguments passed to the log-posterior
+                self._lnpost_args = (
+                    self._x,
+                    self._y,
+                    self._covy,
+                    self._mask,
+                    self._mass,
+                    self._mpivot,
+                    self._rh,
+                    4.0 - self._alpha,
+                )
+
+                self.pars_init = [
+                    b_p_init,
+                    b_s_init,
+                    c_0_init,
+                    c_mu_init,
+                    c_v_init,
+                    np.mean(params[:, 3]),
+                    np.mean(params[:, 4]),
+                    np.mean(params[:, -1]),
+                ]
+
+            else:
+                raise NotImplementedError("Select smooth iteration 1")
+            print()
+        else:
+            raise ValueError("Must select ['orb', 'inf'].")
 
         return None
 

@@ -20,9 +20,9 @@ def power_law(x: float, p: float, s: float) -> float:
     return p * np.power(x, s)
 
 
-@njit()
 def error_function(x: float, c0: float, cm: float, cv: float) -> float:
-    return 0.5 * c0 * (1 - erf((x - cm) / cv))
+    xx = (x - cm) / cv
+    return 0.5 * c0 * (1 - erf(xx))
 
 
 @njit()
@@ -191,9 +191,9 @@ def xi_inf_den_model(
 
 
 def xi_inf_model(
-    r: float, bias: float, c: float, g: float, b0: float, r0: float, rh: float,
+    r: float, bias: float, c: float, g: float, b0: float, r0: float, rh: float, B=0.947
 ) -> float:
-    xi_mod = bias * xi_inf_beta_model(r, b0, r0, g) * xi_zel_interp(r)
+    xi_mod = bias * xi_inf_beta_model(r, b0, r0, g) * B * xi_zel_interp(r)
     xi_mod /= xi_inf_den_model(r, rh, c)
     return xi_mod
 
@@ -218,21 +218,61 @@ def lnpost_inf(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
     return -chi2 - np.log(np.linalg.det(cov))
 
 
-def lnpost_inf_1(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+def lnpost_inf_smooth(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
     # Unpack data
-    x, y, covy, rh = data
+    x, y, covy, mask, mass, m_pivot, rh = data
 
-    # Check priors. 5 model + 1 likelihood parameters
-    bias, c, g, b0, r0 = pars
-    if any([p < 0 for p in pars]):
+    # Check priors. 3 model + 1 likelihood parameters
+    pb, sb, c0, cm, cv, pg, sg, b0, r0, logd = pars
+    if not (-4 < logd < 0) or any([p < 0 for p in [pb, pg, sg, c0, cv, b0, r0]]) or \
+        c0 > 10 or cv > 10 or not (-1 < cm < 1):
         return -np.inf
-    
-    # Compute model deviation from data
-    u = y - xi_inf_model(x, bias, c, g, b0, r0, rh)
-    # Compute chi squared
-    chi2 = np.dot(u, np.linalg.solve(covy, u))
-    return -chi2
+    delta = np.power(10., logd)
+    bias = power_law(mass/m_pivot, pb, sb)
+    c = error_function(np.log10(mass/m_pivot), c0, cm, cv)
+    g = power_law(mass/m_pivot, pg, sg)
 
+    # Aggregate likelihood for all mass bins
+    lnlike = 0
+    for k in range(NMBINS):
+        # Compute model deviation from data
+        u = y[k, mask[k, :]] - xi_inf_model(x[mask[k, :]], bias[k], c[k], g[k], b0, r0, rh[k])
+        # Add percent error to the covariance - regulated by delta
+        cov = covy[k, mask[k, :], :][:, mask[k, :]] + \
+            np.diag(np.power(delta * y[k, mask[k, :]], 2))
+        # Compute chi squared
+        chi2 = np.dot(u, np.linalg.solve(cov, u))
+        lndetc = np.log(np.linalg.det(cov))
+        lnlike -= chi2 + lndetc
+    return lnlike
+
+
+def lnpost_inf_smooth_no_gamma(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    # Unpack data
+    x, y, covy, mask, mass, m_pivot, rh, g = data
+
+    # Check priors. 3 model + 1 likelihood parameters
+    pb, sb, c0, cm, cv, b0, r0, logd = pars
+    if not (-4 < logd < 0) or any([p < 0 for p in [pb, c0, cv, b0, r0]]) or \
+        c0 > 10 or cv > 10 or not (-1 < cm < 1):
+        return -np.inf
+    delta = np.power(10., logd)
+    bias = power_law(mass/m_pivot, pb, sb)
+    c = error_function(np.log10(mass/m_pivot), c0, cm, cv)
+
+    # Aggregate likelihood for all mass bins
+    lnlike = 0
+    for k in range(NMBINS):
+        # Compute model deviation from data
+        u = y[k, mask[k, :]] - xi_inf_model(x[mask[k, :]], bias[k], c[k], g[k], b0, r0, rh[k])
+        # Add percent error to the covariance - regulated by delta
+        cov = covy[k, mask[k, :], :][:, mask[k, :]] + \
+            np.diag(np.power(delta * y[k, mask[k, :]], 2))
+        # Compute chi squared
+        chi2 = np.dot(u, np.linalg.solve(cov, u))
+        lndetc = np.log(np.linalg.det(cov))
+        lnlike -= chi2 + lndetc
+    return lnlike
 
 
 def xihm_model(
