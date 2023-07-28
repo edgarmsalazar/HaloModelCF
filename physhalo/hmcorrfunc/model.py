@@ -292,6 +292,69 @@ def xihm_model(
     return (orb + inf) / RHOM - 1.0
 
 
+def lnpost_xihm_smooth(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    # Unpack data
+    x, y, covy, mask, mass, m_pivot = data
+
+    # Check priors. 3 model + 1 likelihood parameters
+    pr, sr, painf, sainf, a, pb, sb, c0, cm, cv, pg, sg, b0, r0, logd = pars
+    if not (-4 < logd < 0) or \
+        any([p < 0 for p in [pr, sr, painf, a, pb, sb, pg, sg, c0, cv, b0, r0]]) or \
+        c0 > 10 or cv > 10 or sainf > 0 or not (-1 < cm < 1):
+        return -np.inf
+    delta = np.power(10., logd)
+    rh = power_law(mass/m_pivot, pr, sr)
+    ainf = power_law(mass/m_pivot, painf, sainf)
+    bias = power_law(mass/m_pivot, pb, sb)
+    c = error_function(np.log10(mass/m_pivot), c0, cm, cv)
+    g = power_law(mass/m_pivot, pg, sg)
+
+    # Aggregate likelihood for all mass bins
+    lnlike = 0
+    for k in range(NMBINS):
+        # Compute model deviation from data
+        u = y[k, mask[k, :]] - xihm_model(x[mask[k, :]], rh[k], ainf[k], a, bias[k], c[k], g[k], b0, r0, mass[k])
+        # Add percent error to the covariance - regulated by delta
+        cov = covy[k, mask[k, :], :][:, mask[k, :]] + \
+            np.diag(np.power(delta * y[k, mask[k, :]], 2))
+        # Compute chi squared
+        chi2 = np.dot(u, np.linalg.solve(cov, u))
+        lndetc = np.log(np.linalg.det(cov))
+        lnlike -= chi2 + lndetc
+    return lnlike
+
+
+def lnpost_xihm_smooth_no_g(pars: Union[List[float], Tuple[float, ...]], *data) -> float:
+    # Unpack data
+    x, y, covy, mask, mass, m_pivot = data
+
+    # Check priors. 3 model + 1 likelihood parameters
+    pr, sr, painf, sainf, a, pb, sb, c0, cm, cv, b0, r0, logd = pars
+    if not (-4 < logd < 0) or \
+        any([p < 0 for p in [pr, sr, painf, a, pb, sb, c0, cv, b0, r0]]) or \
+        c0 > 10 or cv > 10 or sainf > 0 or not (-1 < cm < 1):
+        return -np.inf
+    delta = np.power(10., logd)
+    rh = power_law(mass/m_pivot, pr, sr)
+    ainf = power_law(mass/m_pivot, painf, sainf)
+    bias = power_law(mass/m_pivot, pb, sb)
+    c = error_function(np.log10(mass/m_pivot), c0, cm, cv)
+    g = 4. - ainf
+
+    # Aggregate likelihood for all mass bins
+    lnlike = 0
+    for k in range(NMBINS):
+        # Compute model deviation from data
+        u = y[k, mask[k, :]] - xihm_model(x[mask[k, :]], rh[k], ainf[k], a, bias[k], c[k], g[k], b0, r0, mass[k])
+        # Add percent error to the covariance - regulated by delta
+        cov = covy[k, mask[k, :], :][:, mask[k, :]] + \
+            np.diag(np.power(delta * y[k, mask[k, :]], 2))
+        # Compute chi squared
+        chi2 = np.dot(u, np.linalg.solve(cov, u))
+        lndetc = np.log(np.linalg.det(cov))
+        lnlike -= chi2 + lndetc
+    return lnlike
+
 
 
 if __name__ == "__main__":

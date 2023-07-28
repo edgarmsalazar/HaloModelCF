@@ -621,10 +621,53 @@ class FullMC(MCMC):
                     np.mean(params[:, 4]),
                     np.mean(params[:, -1]),
                 ]
-
+                
+        if self._ptype == "all":
+            # X, Y data points
+            with h5.File(SRC_PATH + "/data/xihm.h5", "r") as hdf:
+                self._x = hdf['rbins'][()]  # radial bins
+                self._y = np.zeros((NMBINS, len(self._x)))
+                self._mask = np.zeros_like(self._y, dtype=bool)
+                self._covy = np.zeros((NMBINS, len(self._x), len(self._x)))
+                for k, mbin in enumerate(MBINSTRS):
+                    self._y[k, :] = hdf[f'xi/100/{mbin}'][()]
+                    self._covy[k, :, :] = hdf[f'cov/100/{mbin}'][()]
+                    self._mask[k, :] = (self._x > 6 * RSOFT)
+                    
+            # Arguments passed to the log-posterior
+            self._lnpost_args = (
+                self._x,
+                self._y,
+                self._covy,
+                self._mask,
+                self._mass,
+                self._mpivot,
+            )
+            
+            # Initilize parameters to best fits from orb and inf
+            with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
+                pars_orb = hdf_load[f"max_posterior/orb/smooth_2"][()]
+                pars_inf = hdf_load[f"max_posterior/inf/smooth_1"][()]
+                
+            if self._smooth_iter == 1:
+                self.pars_init = [
+                    *pars_orb[:-1],
+                    *pars_inf[:-1],
+                    -2.,
+                ]
+                
+            elif self._smooth_iter == 2:
+                self.pars_init = [
+                    *pars_orb[:-1],
+                    *pars_inf[:5],
+                    *pars_inf[7:-1],
+                    -2.,
+                ]
+                
             else:
                 raise NotImplementedError("Select smooth iteration 1")
             print()
+            
         else:
             raise ValueError("Must select ['orb', 'inf'].")
 
