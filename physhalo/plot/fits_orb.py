@@ -12,7 +12,6 @@ from physhalo.cosmology import RHOM, RSOFT
 from physhalo.hmcorrfunc.model import power_law, rho_orb_model
 from physhalo.plot.config import (CMAP, NORM, SIZE_LABELS, SIZE_LEGEND,
                                   SIZE_TICKS, COLOR_GRAY)
-import tikzplotlib as tikz
 
 plt.rcParams.update(
     {
@@ -71,7 +70,6 @@ def fits_orb_profile():
     plt.tick_params(axis="both", which="major", labelsize=SIZE_TICKS)
 
     plt.tight_layout()
-    tikz.save(SRC_PATH + "/data/plot/tikz/orb_profile.tex")
     plt.savefig(SRC_PATH + "/data/plot/fits_orb_profile.png", bbox_inches="tight")
     return
 
@@ -360,7 +358,6 @@ def fit_orb_pars():
     ax3.set_yticks([0.03, 0.035, 0.04, 0.045])
 
     plt.tight_layout()
-    # tikz.save(SRC_PATH + "/data/plot/tikz/orb_fit_pars.tex")
     plt.savefig(SRC_PATH + "/data/plot/fits_orb_pars.png", bbox_inches="tight")
     return None
 
