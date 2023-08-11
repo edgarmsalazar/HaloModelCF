@@ -12,6 +12,7 @@ from physhalo.cosmology import RHOM, RSOFT
 from physhalo.hmcorrfunc.model import power_law, rho_orb_model
 from physhalo.plot.config import (CMAP, NORM, SIZE_LABELS, SIZE_LEGEND,
                                   SIZE_TICKS, COLOR_GRAY)
+import tikzplotlib as tikz
 
 plt.rcParams.update(
     {
@@ -60,7 +61,7 @@ def fits_orb_profile():
             label=f"{mbin}",
         )
 
-    plt.fill_betweenx([-1, 1e16], 0, 6 * RSOFT, color="k", alpha=0.25)
+    plt.fill_betweenx([1e8, 1e16], 0.01, 6 * RSOFT, color="k", alpha=0.25)
     plt.xlim(2e-2, 5)
     plt.xscale("log")
     plt.xlabel(r"$r [h^{-1}{\rm Mpc}]$", fontsize=SIZE_LABELS)
@@ -70,6 +71,7 @@ def fits_orb_profile():
     plt.tick_params(axis="both", which="major", labelsize=SIZE_TICKS)
 
     plt.tight_layout()
+    tikz.save(SRC_PATH + "/data/plot/tikz/orb_profile.tex")
     plt.savefig(SRC_PATH + "/data/plot/fits_orb_profile.png", bbox_inches="tight")
     return
 
@@ -244,10 +246,10 @@ def fit_orb_pars():
     plabels = [r"$r_{\rm h}~[h^{-1}{\rm Mpc}]$", r"$\alpha_{\infty}$", r"$a$"]
     M_PIVOT = np.power(10.0, 14)
 
-    mass_pred = np.logspace(13, 15, num=100, base=10)
+    mass_pred = np.logspace(13, 15, num=20, base=10)
     pars = np.zeros((NMBINS, 4))
     errs = np.zeros((NMBINS, 4))
-    with h5.File(SRC_PATH + "/data/fits/mle_orb_good.h5", "r") as hdf_load:
+    with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
         for k, mbin in enumerate(MBINSTRS):
             pars[k, :] = hdf_load[f"max_posterior/orb/{mbin}"][()]
             errs[k, :] = np.sqrt(np.diag(hdf_load[f"covariance/orb/{mbin}"][()]))
@@ -358,6 +360,7 @@ def fit_orb_pars():
     ax3.set_yticks([0.03, 0.035, 0.04, 0.045])
 
     plt.tight_layout()
+    # tikz.save(SRC_PATH + "/data/plot/tikz/orb_fit_pars.tex")
     plt.savefig(SRC_PATH + "/data/plot/fits_orb_pars.png", bbox_inches="tight")
     return None
 
