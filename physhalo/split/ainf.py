@@ -1,5 +1,5 @@
 import os
-from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool as Pool
 
 import h5py as h5
 import numpy as np
@@ -97,11 +97,68 @@ def vt():
     return
 
 
-def save_per_mass_bin():
+@timer
+def get_tinf():
+    # Load scale factor
+    with h5.File(SRC_PATH + "/scale_factor.h5", "r") as hdf_load:
+        scales_all = hdf_load["scale_factor"][()]
+    scales_mask = scales_all >= 0.4
+    scales = scales_all[scales_mask]
     
+    # Load Rt
+    with h5.File(SRC_PATH + "/orbits/garcia22/rt.h5", "r") as hdf_load:
+        rt = hdf_load["Rt"][()]
+        
+    # Load particles orbits as a global variable
+    with h5.File(SRC_PATH + "/orbits/orbit_catalogue_%d.h5", "r",
+                 driver="family", memb_size=MEMBSIZE) as hdf:
+        rps = hdf["Rp"]
+
+        def find_a_acc(i):
+            rp_j = rps[i][scales_mask]
+            rt_j = rt[i]
+            if rp_j[-1] <= rt_j:
+                a_acc_j = scales[-1]
+            elif np.all(rp_j > rt_j):
+                a_acc_j = scales[0]
+            else:
+                mask = np.ones_like(scales, dtype=bool)
+                crossed_rt = (np.diff(np.sign(rp_j - rt_j)) != 0)
+                if crossed_rt.sum() >= 1:
+                    mask = scales <= scales[:-1][crossed_rt][-1]
+                scales_interp = interp1d(rp_j[mask],
+                                         scales[mask],
+                                         kind="linear",
+                                         bounds_error=False,
+                                         fill_value=(
+                                             scales[mask][0],
+                                             scales[mask][-1]
+                                             ),
+                                         )
+                a_acc_j = scales_interp(rt_j)
+            return a_acc_j
+        
+        # a_acc = []
+        # for i in range(10000):
+        #     a_acc.append(find_a_acc(i))
+        with Pool() as pool:
+            a_acc = pool.map(find_a_acc, range(10000))
+    
+    with h5.File(SRC_PATH + "/orbits/garcia22/a_acc_rt.h5", "w") as hdf_save:
+        hdf_save.create_dataset("a_acc", data=np.array(a_acc), dtype=np.float32)
     
     return
 
+
+@timer
+def get_vr():
+    # Load free fall time
+    with h5.File(SRC_PATH + "/orbits/garcia22/tff.h5", "r") as hdf:
+        tff = hdf["tff"][()]
+    
+    
+    
+    return
 
 def main(mbin_i=0) -> None:
     basepath = "/spiff/rgarciamar/susmita_catalog/rafael_halo_model/data/rt"
@@ -115,7 +172,6 @@ def main(mbin_i=0) -> None:
     with h5.File(SRC_PATH + "/scale_factor.h5", "r") as hdf_load:
         scales = hdf_load["scale_factor"][()]
     scales_mask = scales >= 0.4
-    # scales_mask_int = np.arange(100)[scales_mask]
     scales = scales[scales_mask]
 
     # Instantiate Colossus cosmology
@@ -191,5 +247,7 @@ def main(mbin_i=0) -> None:
 
 if __name__ == "__main__":
     # vt()
-    main()
+    # get_tinf()
+    get_vr()
+    # main()
     
