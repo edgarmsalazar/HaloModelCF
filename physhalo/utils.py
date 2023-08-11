@@ -1,6 +1,9 @@
-from typing import Callable
+from typing import Callable, Union
 from datetime import timedelta
 from time import time
+from numba import jit
+import numpy as np
+
 
 BULLET = "\u25CF"
 
@@ -37,3 +40,24 @@ def timer(
         return return_value
 
     return wrapper
+
+
+# @jit(nopython=True, nogil=True)
+def replace_val(var_io: np.ndarray,
+                idx: Union[np.ndarray, list],
+                value: Union[int, float],
+                ) -> np.ndarray:
+    '''Changes the values of 'var_io' by placing 'value' in all elements of 
+    'idx'
+
+    Args:
+        var_io (np.ndarray): input-output array that will have elements
+                             overwritten.
+        idx (np.ndarray | list): mask with indices or boolean values.
+        value (int | float): numerical value to write in all selected elements.
+
+    Returns:
+        np.ndarray: Returns the same array (might be a copy of) with new values.
+    '''
+    var_io[idx] = value
+    return var_io

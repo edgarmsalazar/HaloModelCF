@@ -346,19 +346,15 @@ class BinMC(MCMC):
                 )
 
                 # Find beta0 and r0 with fixed gamma = 2
-                (beta0_init, r0_init), _ = curve_fit(
-                    lambda x, b, r: xi_inf_model(x, bias_init, c_init, 2.0, b, r, rh),
+                (rinf_init, mu_init), _ = curve_fit(
+                    lambda x, rinf, mu: xi_inf_model(x, bias_init, c_init, 2.0, rinf, mu, rh),
                     self._x,
                     self._y,
-                    p0=[70.0, 0.4],
+                    p0=[3, 0.4],
                     sigma=np.diag(self._covy),
                 )
-                # print(beta0_init, r0_init)
 
-                # print()
-
-                # print("".join("{:>6.3f}\t".format(i) for i in res.x))
-                self.pars_init = [bias_init, c_init, 2, beta0_init, r0_init, -2]
+                self.pars_init = [bias_init, c_init, 2, rinf_init, mu_init, -2]
 
             # Initialize parameters to the previous mass bin best fit values.
             # This is ok because the parameter variation with mass is smooth.
@@ -537,6 +533,7 @@ class FullMC(MCMC):
             # best fits as a function of mass.
             params = np.zeros((NMBINS, 6))
             errors = np.zeros((NMBINS, 6))
+
             with h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
                 for k, mbin in enumerate(MBINSTRS):
                     params[k, :] = hdf_load[f"max_posterior/inf/{mbin}"][()]
@@ -598,31 +595,11 @@ class FullMC(MCMC):
                     np.mean(params[:, 4]),
                     np.mean(params[:, -1]),
                 ]
-            elif self._smooth_iter == 2:
-                # Arguments passed to the log-posterior
-                self._lnpost_args = (
-                    self._x,
-                    self._y,
-                    self._covy,
-                    self._mask,
-                    self._mass,
-                    self._mpivot,
-                    self._rh,
-                    4.0 - self._alpha,
-                )
-
-                self.pars_init = [
-                    b_p_init,
-                    b_s_init,
-                    c_0_init,
-                    c_mu_init,
-                    c_v_init,
-                    np.mean(params[:, 3]),
-                    np.mean(params[:, 4]),
-                    np.mean(params[:, -1]),
-                ]
                 
-        if self._ptype == "all":
+            else:
+                raise NotImplementedError("Select up to smooth iteration 1")
+            
+        elif self._ptype == "all":
             # X, Y data points
             with h5.File(SRC_PATH + "/data/xihm.h5", "r") as hdf:
                 self._x = hdf['rbins'][()]  # radial bins

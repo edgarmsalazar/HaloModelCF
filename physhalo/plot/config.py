@@ -25,14 +25,28 @@ ERRLINE_2 = ErrorbarContainer(
     has_yerr=True,
     label="Individual",
 )
+
+ERRLINE_3 = ErrorbarContainer(
+    (LINE, [LINE], [BARLINE]),
+    has_xerr=False,
+    has_yerr=True,
+    label="All",
+)
+
 LEGEND_1 = [ERRLINE_1, Line2D([0], [0], color="k", lw=1.0, label="Fit")]
 LEGEND_2 = [ERRLINE_2, Line2D([0], [0], color="k", lw=1.0, label="Smooth")]
+LEGEND_3 = [ERRLINE_3, Line2D([0], [0], color="k", lw=1.0, ls="--", label="Orb"), Line2D([0], [0], color="k", lw=1.0, ls=":", label="Inf")]
 NORM = BoundaryNorm(MBINEDGES, CMAP.N * (NMBINS - 1) / NMBINS)
 
 # Formatting
 SIZE_TICKS = 12
 SIZE_LABELS = 16
 SIZE_LEGEND = 14
+
+COLOR_BLUE = '#6591b5'
+COLOR_GRAY = '#808080'
+COLOR_RED = '#db715b'
+COLOR_GREEN = '#59bb5c'
 
 
 if __name__ == "__main__":
