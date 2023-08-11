@@ -263,7 +263,7 @@ def fits_inf():
             pars_smooth_1 = hdf_load[f"max_posterior/inf/smooth_1"][()]
         
     with h5.File(join(SRC_PATH, "data/xihm_split.h5"), 'r') as hdf, \
-        h5.File(SRC_PATH + "/data/fits/mle_orb_good.h5", "r") as hdf_load:
+        h5.File(SRC_PATH + "/data/fits/mle.h5", "r") as hdf_load:
         r = hdf['rbins_ext'][()]  # x
         rh = np.zeros(len(r))
         xi = np.zeros((NMBINS, len(r)))
@@ -348,7 +348,7 @@ def fits_inf():
 def fits_inf_pars():
     from matplotlib.ticker import NullFormatter, NullLocator
 
-    plabels = [r"$b$", r"$c$", r"$\gamma$", r"$\beta_0$", r'$r_{0}~[h^{-1}{\rm Mpc}]$', r"$\log_{10}\delta$"]
+    plabels = [r"$b$", r"$c$", r"$\gamma$", r'$r_{\rm inf}~[h^{-1}{\rm Mpc}]$', r"$\mu$", r"$\log_{10}\delta$"]
     M_PIVOT = np.power(10.0, 14)
     
     mass_pred = np.logspace(13, 15, num=100, base=10)
@@ -363,7 +363,7 @@ def fits_inf_pars():
     with h5.File(SRC_PATH + "/data/mass.h5", "r") as hdf_load:
         mass = hdf_load["mass"][()]
         
-    _, axes = plt.subplots(2, 3, figsize=(10, 6))
+    _, axes = plt.subplots(2, 3, figsize=(8, 5))
     ax1, ax2, ax3, ax4, ax5, ax6 = axes.flatten()
     ax6.axis('off')
     
@@ -414,8 +414,8 @@ def fit_inf_corner() -> None:
         r"$c_\sigma$",
         r"$\gamma_{p}$",
         r"$\gamma_{s}$",
-        r"$\beta_0$",
-        r"$r_0$",
+        r"$r_{\rm inf}$",
+        r"$\mu$",
         r"$\log_{10} \delta$",
     ]
 
@@ -522,7 +522,7 @@ def biases():
                 color='b', fmt='^', ms=2.0, elinewidth=0.5, capsize=3, label=r'$\xi_{\rm hm}/\xi_{\rm mm}$')
     ax1.set_xlabel(r'$\log M_{\rm orb}$', fontsize=SIZE_LABELS)
     ax1.set_xscale('log')
-    ax1.set_ylabel('Bias', fontsize=SIZE_LABELS)
+    ax1.set_ylabel(r'${\rm Bias}$', fontsize=SIZE_LABELS)
     ax1.legend(loc='upper left', fontsize=10)
     ax1.tick_params(axis="both", which="major", labelsize=SIZE_TICKS)
 
