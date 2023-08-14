@@ -151,103 +151,51 @@ def get_tinf():
 
 
 @timer
-def get_vr():
-    # Load free fall time
-    with h5.File(SRC_PATH + "/orbits/garcia22/tff.h5", "r") as hdf:
-        tff = hdf["tff"][()]
+def get_vr_scale_cut():
+    from datetime import timedelta
+    from time import time
+    from physhalo.utils import BULLET, COLS
     
-    
-    
-    return
-
-def main(mbin_i=0) -> None:
-    basepath = "/spiff/rgarciamar/susmita_catalog/rafael_halo_model/data/rt"
-    if mbin_i > 6:
-        basepath = os.path.join(basepath, "6Mpc")
-    print(mbin_i, basepath)
-
-    Mmin, Mmax = MBINEDGES[mbin_i]
-    mbinstr = MBINSTRS[mbin_i]
-
-    with h5.File(SRC_PATH + "/scale_factor.h5", "r") as hdf_load:
-        scales = hdf_load["scale_factor"][()]
-    scales_mask = scales >= 0.4
-    scales = scales[scales_mask]
-
     # Instantiate Colossus cosmology
     COSMO_COLOSSUS = {'flat': True, 'H0': 100*COSMO["h"], 'Om0': COSMO["Om0"], 'Ob0': COSMO["Ob0"], 'sigma8': COSMO["sigma8"], 'ns': COSMO["ns"]}
     cosmology.addCosmology("myCosmo", COSMO_COLOSSUS)
     cosmo = cosmology.setCosmology("myCosmo")
     
-    #
-    # Rescale r by Rt and vr by Vt =============================================
-    #
-    # with h5.File(SRC_PATH + "/orbits/garcia22/mass_bin_particles.h5", "r") as hdf_load:
-    #     mask_mbin = hdf_load[mbinstr][()]
-    # with h5.File(SRC_PATH + "/orbits/garcia22/rt.h5", "r") as hdf_load:
-    #     rt = hdf_load["Rt"][()]
-    # rt = rt[mask_mbin]
-    # with h5.File(SRC_PATH + "/orbits/garcia22/vt.h5", "r") as hdf_load:
-    #     vt = hdf_load["Vt"][()]
-    # vt = vt[mask_mbin]
-    # with h5.File(SRC_PATH + "/orbits/garcia22/tff.h5", "r") as hdf_load:
-    #     tff = hdf_load["tff"][()]
-    # tff = tff[mask_mbin]
-    
-    # with h5.File(SRC_PATH + "/orbits/orbit_catalogue_%d.h5", "r",
-    #              driver="family", memb_size=MEMBSIZE) as hdf_load:
-        # pid = hdf_load["PID"][()]
-        # pid = pid[mask_mbin]
-        # hid = hdf_load["HID"][()]
-        # hid = hid[mask_mbin]
-        # rp = hdf_load["Rp"][:, [0, 1, 2]]
-        # rp = rp[mask_mbin, :]
-        # vrp = hdf_load["Vrp"][:, scales_mask_int]
-        # vrp = vrp[mask_mbin] / vt
-    # pid = np.load(os.path.join(basepath, "{}/pid.npy".format(mbinstr)))
-    hid = np.load(os.path.join(basepath, "{}/hid.npy".format(mbinstr)))
-    # mass = np.load(os.path.join(basepath, "{}/mass.npy".format(mbinstr)))
-
-    rp = np.load(os.path.join(basepath, "{}/rp_scaled.npy".format(mbinstr)))[:, scales_mask]
-    # vrp = np.load(os.path.join(basepath, "{}/vrp_scaled.npy".format(mbinstr)))[:, scales_mask]
-    tff = np.load(os.path.join(basepath, "{}/tff.npy".format(mbinstr)))
-    tdyn = tff / 4 * np.minimum(rp[:, 0], 1)
-    tdyn[hid == -1] = 0
-    # scalecut = 1 / (1 + cosmo.lookbackTime(tdyn, inverse=True))
-    
-    def find_tinf(j):
-        alpha = 1.00
+    # Load scale factor
+    with h5.File(SRC_PATH + "/scale_factor.h5", "r") as hdf_load:
+        scales = hdf_load["scale_factor"][()]
         
-        if rp[j][-1] <= alpha:
-            tinf_j = scales[-1]
-        elif np.all(rp[j] > alpha):
-            tinf_j = scales[0]
-        else:
-            mask = np.ones_like(scales, dtype=bool)
-            crosses = (np.diff(np.sign(rp[j] - alpha)) != 0)
-            if crosses.sum() >= 1:
-                mask = scales <= scales[:-1][crosses][-1]
-            scales_interp = interp1d(rp[j][mask], scales[mask], kind="linear",
-                                     bounds_error=False,
-                                     fill_value=(scales[mask][0],
-                                                 scales[mask][-1]))
-            tinf_j = scales_interp(alpha)
-        return tinf_j
+    # Load free fall time
+    with h5.File(SRC_PATH + "/orbits/garcia22/tff.h5", "r") as hdf:
+        tff = hdf["tff"][()]
     
-    def get_tinf():
-        with Pool(16) as pool:
-            tinf = pool.map(find_tinf, range(rp.shape[0]))
-        tinf = np.array(tinf)
-        return tinf
-
-    tinf = get_tinf()
-    np.save(SRC_PATH + f"/orbits/garcia22/tinf/{mbinstr}.npy", tinf)
-    return None
-
+    # Load Rt
+    with h5.File(SRC_PATH + "/orbits/garcia22/rt.h5", "r") as hdf:
+        rt = hdf["Rt"][()]
+        
+    with h5.File(SRC_PATH + "/orbits/orbit_catalogue_%d.h5", "r",
+                 driver="family", memb_size=MEMBSIZE) as hdf_load:
+        rps = hdf_load["Rp"][:, 0] / rt
+        hid = hdf_load["HID"][()]
+    
+    # Compute dynamical time    
+    tdyn = tff / 4 * np.minimum(rps, 1)
+    tdyn[hid == -1] = 0  # Particles with no parent haloes
+    
+    # Scale factor corresponding to the 
+    scalecut = 1 / (1 + cosmo.lookbackTime(tdyn, inverse=True))
+    
+    with h5.File(SRC_PATH + "/orbits/garcia22/split_scale_cut.h5", "w") as hdf_save:
+        hdf_save.create_dataset("scale_cut", data=scalecut, dtype=np.float16)
+        
+    with h5.File(SRC_PATH + "/orbits/garcia22/tdyn.h5", "w") as hdf_save:
+        hdf_save.create_dataset("tdyn", data=tdyn)
+    
+    return
 
 if __name__ == "__main__":
     # vt()
     # get_tinf()
-    get_vr()
-    # main()
+    # get_vr_scale_cut()
+    pass
     
